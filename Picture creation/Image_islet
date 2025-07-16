@@ -1,0 +1,82 @@
+import numpy as np
+import cv2
+import matplotlib.pyplot as plt
+
+# Define hex color dictionary
+colors = {
+    "background": "#F2F2F2",
+    "islet": "#E69F00",
+    "duct": "#56B4E9",
+    "acini": "#009E73",
+    "alpha_cell": "#F0E442",
+    "beta_cell": "#56E39F",
+    "item7": None,
+    "item8": None,
+    "item9": None
+}
+
+def hex_to_bgr(hex_color):
+    if not hex_color:
+        return (0, 0, 0)
+    hex_color = hex_color.lstrip('#')
+    rgb = tuple(int(hex_color[i:i+2], 16) for i in (0, 2, 4))
+    return rgb[::-1]  # reverse for BGR
+
+bg_color = hex_to_bgr(colors["background"])
+islet_color = hex_to_bgr(colors["islet"])
+
+height, width = 256, 256
+image = np.full((height, width, 3), bg_color, dtype=np.uint8)
+
+center = np.array([width // 2, height // 2])
+axes = np.array([60, 45])  # ellipse radii
+angle = 90  # rotation angle (degrees)
+
+# Generate rough elliptical contour points
+num_points = 50
+theta = np.linspace(0, 2*np.pi, num_points)
+
+# Add random noise factor to radius at each angle
+noise_amplitude = 2  # how rough
+noise = np.random.normal(0, noise_amplitude, num_points)
+
+# Parametric ellipse before noise
+x = axes[0] * np.cos(theta)
+y = axes[1] * np.sin(theta)
+
+# Add noise to radii by scaling x and y with (1 + noise / axes)
+# or add noise directly to the radius length for each point
+radii = np.sqrt(x**2 + y**2)
+radii_noisy = radii + noise
+radii_noisy = np.clip(radii_noisy, a_min=axes.min()*0.5, a_max=axes.max()*1.5)  # clamp
+
+# Calculate new x,y with noisy radius but keep angle theta
+x_noisy = radii_noisy * np.cos(theta)
+y_noisy = radii_noisy * np.sin(theta)
+
+# Build contour points, apply center offset and rotation if needed
+pts = np.vstack((x_noisy, y_noisy)).T
+
+# Rotation matrix (optional if angle != 0)
+if angle != 0:
+    rad = np.deg2rad(angle)
+    R = np.array([[np.cos(rad), -np.sin(rad)], [np.sin(rad), np.cos(rad)]])
+    pts = pts @ R.T
+
+pts += center
+pts = np.round(pts).astype(np.int32)
+
+# Reshape for cv2.polylines/fillPoly
+pts = pts.reshape((-1, 1, 2))
+
+# Fill the noisy shape
+cv2.fillPoly(image, [pts], islet_color)
+
+# Optional blur
+#image = cv2.GaussianBlur(image, (9, 9), 0)
+
+plt.figure(figsize=(4, 4))
+plt.imshow(cv2.cvtColor(image, cv2.COLOR_BGR2RGB))
+plt.title("Rough Elliptical Islet")
+plt.axis("off")
+plt.show()

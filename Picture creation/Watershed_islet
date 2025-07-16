@@ -1,0 +1,57 @@
+import numpy as np
+import matplotlib.pyplot as plt
+
+# 1. Generate elevation profile
+np.random.seed(0)
+x = np.linspace(0, 100, 500)
+y = (
+    np.sin(x / 8) * 10 +
+    np.sin(x / 3) * 4
+)
+y = y - y.min() + 5  # Shift to positive range
+
+# 2. Threshold
+threshold = 26
+
+# 3. Find where curve is below threshold
+below = y < threshold
+crossings = np.where(np.diff(below.astype(int)) != 0)[0].tolist()
+
+# 4. Include edges if needed
+if below[0]:
+    crossings = [0] + crossings
+if below[-1]:
+    crossings.append(len(x) - 1)
+
+# 5. Plot setup
+fig, ax = plt.subplots(figsize=(12, 5))
+basin_handles = []
+
+# 6. Fill basins and store handles
+for i in range(0, len(crossings) - 1, 2):
+    start = crossings[i]
+    end = crossings[i + 1]
+
+    mask = (x >= x[start]) & (x <= x[end])
+    y_fill = np.maximum( threshold,y[mask])
+    color = plt.cm.viridis(0.2 + 0.6 * (i / len(crossings)))
+    basin = ax.fill_between(x[mask], threshold, y2=y[mask], color=color, alpha=0.6,
+                            label=f'Basin {i // 2 + 1}')
+    basin_handles.append(basin)
+
+# 7. Plot elevation curve and threshold
+line1, = ax.plot(x, y, color='black', linewidth=2, label='Elevation profile')
+line2 = ax.axhline(threshold, color='red', linestyle='-', linewidth=1.5, label=f'Threshold = {threshold}')
+
+# 8. Combine legend handles
+legend_handles = [line1, line2] + basin_handles
+ax.legend(handles=legend_handles, loc='upper right')
+
+# 9. Style
+ax.set_title('Watershed segmentation 1D-example', fontsize=14)
+ax.set_xlabel('Position')
+ax.set_ylabel('Elevation')
+ax.grid(True)
+
+plt.tight_layout()
+plt.show()

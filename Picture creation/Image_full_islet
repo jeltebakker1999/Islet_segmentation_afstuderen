@@ -1,0 +1,126 @@
+import numpy as np
+import cv2
+import matplotlib.pyplot as plt
+
+colors = {
+    "background": "#F2F2F2",
+    "islet": "#E69F00",
+    "duct": "#56B4E9",
+    "acini": "#009E73",
+    "alpha_cell": "#F0E442",
+    "beta_cell": "#56E39F",
+    "item7": None,
+    "item8": None,
+    "item9": None
+}
+
+def hex_to_bgr(hex_color):
+    if not hex_color:
+        return (0, 0, 0)
+    hex_color = hex_color.lstrip('#')
+    rgb = tuple(int(hex_color[i:i+2], 16) for i in (0, 2, 4))
+    return rgb[::-1]
+
+bg_color = hex_to_bgr(colors["background"])
+islet_color = hex_to_bgr(colors["islet"])
+alpha_color = hex_to_bgr(colors["alpha_cell"])
+beta_color = hex_to_bgr(colors["beta_cell"])
+
+height, width = 256, 256
+image = np.full((height, width, 3), bg_color, dtype=np.uint8)
+
+center = np.array([width // 2, height // 2])
+axes = np.array([60, 45])
+angle = 90
+
+num_points = 50
+theta = np.linspace(0, 2*np.pi, num_points)
+
+noise_amplitude = 2
+noise = np.random.normal(0, noise_amplitude, num_points)
+
+x = axes[0] * np.cos(theta)
+y = axes[1] * np.sin(theta)
+
+radii = np.sqrt(x**2 + y**2)
+radii_noisy = radii + noise
+radii_noisy = np.clip(radii_noisy, a_min=axes.min()*0.5, a_max=axes.max()*1.5)
+
+x_noisy = radii_noisy * np.cos(theta)
+y_noisy = radii_noisy * np.sin(theta)
+
+pts = np.vstack((x_noisy, y_noisy)).T
+
+if angle != 0:
+    rad = np.deg2rad(angle)
+    R = np.array([[np.cos(rad), -np.sin(rad)], [np.sin(rad), np.cos(rad)]])
+    pts = pts @ R.T
+
+pts += center
+pts = np.round(pts).astype(np.int32)
+pts = pts.reshape((-1, 1, 2))
+
+cv2.fillPoly(image, [pts], islet_color)
+
+# Create mask for islet
+mask = np.zeros((height, width), dtype=np.uint8)
+cv2.fillPoly(mask, [pts], 255)
+
+# Find islet edge pixels for alpha cell candidates
+kernel = np.ones((3,3), np.uint8)
+eroded_mask = cv2.erode(mask, kernel, iterations=5)  # Erode more for thicker core
+periphery_mask = cv2.subtract(mask, eroded_mask)  # Periphery ring
+
+# Get coordinates for:
+ys, xs = np.where(mask == 255)
+all_coords = np.vstack((xs, ys)).T
+
+# Coordinates in periphery (alpha candidates)
+ys_p, xs_p = np.where(periphery_mask == 255)
+periphery_coords = np.vstack((xs_p, ys_p)).T
+
+# Coordinates in core (beta candidates)
+ys_c, xs_c = np.where(eroded_mask == 255)
+core_coords = np.vstack((xs_c, ys_c)).T
+
+# Sample cells
+total_islet_pixels = len(all_coords)
+num_beta = int(total_islet_pixels * 0.30)
+num_alpha = int(total_islet_pixels * 0.075)  # 7.5% alpha cells on sides
+
+# Sample beta cells from entire islet, excluding alpha cells later
+# To avoid overlap, we will pick beta cells after removing alpha coords from all coords
+# So first sample alpha cells from periphery
+num_alpha = min(num_alpha, len(periphery_coords))
+alpha_indices = np.random.choice(len(periphery_coords), num_alpha, replace=False)
+alpha_points = periphery_coords[alpha_indices]
+
+# Remove alpha points from all_coords for beta sampling
+alpha_set = set(map(tuple, alpha_points))
+all_coords_set = set(map(tuple, all_coords))
+beta_candidates = np.array(list(all_coords_set - alpha_set))
+
+num_beta = min(num_beta, len(beta_candidates))
+beta_indices = np.random.choice(len(beta_candidates), num_beta, replace=False)
+beta_points = beta_candidates[beta_indices]
+
+cell_radius = 2
+
+# Draw alpha cells (yellow)
+for (x_c, y_c) in alpha_points:
+    cv2.circle(image, (x_c, y_c), cell_radius, alpha_color, -1)
+
+# Draw beta cells (green)
+for (x_c, y_c) in beta_points:
+    cv2.circle(image, (x_c, y_c), cell_radius, beta_color, -1)
+
+#image = cv2.GaussianBlur(image, (7, 7), 0)
+
+plt.figure(figsize=(5, 5))
+plt.imshow(cv2.cvtColor(image, cv2.COLOR_BGR2RGB))
+plt.title("Islet: 80% Beta Cells + ~7.5% Peripheral Alpha Cells")
+plt.legend(["Islet", "Alpha Cells", "Beta Cells"], loc="upper right")
+plt.tight_layout()
+plt.gca().set_facecolor(colors["background"])
+plt.axis("off")
+plt.show()

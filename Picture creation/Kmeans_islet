@@ -1,0 +1,67 @@
+import numpy as np
+import matplotlib.pyplot as plt
+
+# Data points: two clusters
+np.random.seed(42)
+points = np.vstack([
+    np.random.randn(10, 2) + [2, 2],
+    np.random.randn(10, 2) + [7, 7]
+])
+
+# Initialize centroids somewhere random, not close to data clusters
+centroids = np.array([[4, 5], [6, 4]])
+
+fig, axes = plt.subplots(2, 2, figsize=(12, 10))
+
+titles = [
+    "A. Initialize k centroids",
+    "B. Assign points to closest centroid",
+    "C. Update centroids",
+    "D. Repeat until convergence"
+]
+
+# Step A: initial centroids
+ax = axes[0, 0]
+ax.scatter(points[:, 0], points[:, 1], c='gray', label='Data points')
+ax.scatter(centroids[:, 0], centroids[:, 1], c=['red', 'blue'], s=200, marker='X', label='Centroids')
+ax.set_title(titles[0])
+ax.legend()
+ax.text(-0.1, 1.1, 'A', transform=ax.transAxes, fontsize=18, fontweight='bold')
+
+# Step B: assign points to closest centroid
+ax = axes[0, 1]
+distances = np.linalg.norm(points[:, None] - centroids[None, :], axis=2)
+assignments = np.argmin(distances, axis=1)
+colors = np.array(['red', 'blue'])
+ax.scatter(points[:, 0], points[:, 1], c=colors[assignments])
+ax.scatter(centroids[:, 0], centroids[:, 1], c=['red', 'blue'], s=200, marker='X')
+ax.set_title(titles[1])
+ax.text(-0.1, 1.1, 'B', transform=ax.transAxes, fontsize=18, fontweight='bold')
+
+# Step C: update centroids
+ax = axes[1, 0]
+new_centroids = np.array([points[assignments == i].mean(axis=0) for i in range(2)])
+ax.scatter(points[:, 0], points[:, 1], c=colors[assignments])
+ax.scatter(new_centroids[:, 0], new_centroids[:, 1], c=['red', 'blue'], s=200, marker='X', label='Updated centroids')
+ax.set_title(titles[2])
+ax.text(-0.1, 1.1, 'C', transform=ax.transAxes, fontsize=18, fontweight='bold')
+ax.legend()
+
+# Step D: repeat assign & update
+ax = axes[1, 1]
+distances2 = np.linalg.norm(points[:, None] - new_centroids[None, :], axis=2)
+assignments2 = np.argmin(distances2, axis=1)
+updated_centroids = np.array([points[assignments2 == i].mean(axis=0) for i in range(2)])
+ax.scatter(points[:, 0], points[:, 1], c=colors[assignments2])
+ax.scatter(updated_centroids[:, 0], updated_centroids[:, 1], c=['red', 'blue'], s=200, marker='X', label='New centroids')
+ax.set_title(titles[3])
+ax.text(-0.1, 1.1, 'D', transform=ax.transAxes, fontsize=18, fontweight='bold')
+ax.legend()
+
+for ax in axes.flatten():
+    ax.set_xlim(0, 10)
+    ax.set_ylim(0, 10)
+    ax.grid(True)
+
+plt.tight_layout()
+plt.show()
